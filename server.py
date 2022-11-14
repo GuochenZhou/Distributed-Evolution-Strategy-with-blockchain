@@ -18,7 +18,6 @@ status = {
     'blockchain': None,
     'address': "",
     'solver': None,
-    'island_option': None
     }
 
 app = Flask(__name__)
@@ -51,8 +50,8 @@ def new_option():
                        x=np.array(temp_option['x']),
                        y=np.array(temp_option['y']))
     print(option.y)
-    status['solver'].time_function_evaluations += temp_option['runtime']
-    print(status['solver'].time_function_evaluations)
+    status['solver'].runtime += temp_option['runtime']
+    print(status['solver'].runtime)
     status['blockchain'].add_current_option(option)
     return "Success", 201
 
@@ -65,7 +64,10 @@ def renew_global_option():
         results = status['solver'].iterate()
         status['blockchain'].renew_global_options(results)
         mine_options()
-        if status['solver']._check_terminations:
+        if status['solver']._check_terminations():
+            print(status['solver'].runtime)
+            print(status['solver'].max_runtime)
+            print(status['solver'].best_so_far_y)
             status['s'] = 'stop'
     return json.dumps({"global_options": status['blockchain'].global_options}, cls=MyEncoder), 201
 
@@ -101,11 +103,11 @@ def get_task():
         'upper_boundary': status['solver'].upper_boundary
     }
     task_options = {
-        "max_runtime": status['island_option']['island_max_runtime'],
+        "max_runtime": status['solver'].island_max_runtime,
         "fitness_threshold": status['solver'].fitness_threshold,
         "seed_rng": status['solver'].seed_rng,
         "n_islands": status['solver'].n_islands,
-        'verbose': status['island_option']['island_verbose']
+        'verbose': status['solver'].island_verbose
     }
     print(status['solver'].fitness_function.__name__)
     return json.dumps({"problem": task_problem, "options": task_options}, cls=MyEncoder), 200
@@ -195,15 +197,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
     address = "{host}:{port}".format(host=args.host, port=args.port)
     status['address'] = address
-    function = cf.sphere
+    function = cf.ellipsoid
     ndim_problem = 1000
-    island_max_runtime = 30
     problem = {'fitness_function': function,
                'ndim_problem': ndim_problem,
                'upper_boundary': 10.0 * np.ones((ndim_problem,)),
                'lower_boundary': -10.0 * np.ones((ndim_problem,))}
     options = {'max_function_evaluations': np.Inf,
                'max_runtime': 3600 * 2,  # seconds
+               'island_max_runtime': 60,
+               'island_verbose': False,
                # 'fitness_threshold': 1e-10,
                'seed_rng': 2022,
                'record_fitness': True,
@@ -212,10 +215,6 @@ if __name__ == '__main__':
                'n_islands': 10,
                'sigma': 0.3}  # for ES
     status['solver'] = Solver(problem, options)
-    status['island_option'] = {
-        "island_max_runtime": island_max_runtime,
-        "island_verbose": False
-    }
     status['blockchain'] = bl.Blockchain()
     status['blockchain'].create_genesis_block()
     status['blockchain'].renew_global_options(status['solver'].get_options())

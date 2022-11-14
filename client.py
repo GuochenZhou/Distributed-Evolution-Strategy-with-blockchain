@@ -132,6 +132,7 @@ class Client(object):
             temp_option = dict(temp_options[np.random.randint(self.n_islands)])
             self.options['s'], self.options['tm'] = np.array(temp_option['s']), np.array(temp_option['tm'])
             self.options['c_s'], self.options['sigma'] = temp_option['c_s'], temp_option['sigma']
+            self.options['x'] = temp_option['x']
             optimizer = LMMAES(self.problem, self.options)
             result = optimizer.optimize()
             option = {"node_address": self.node_id,

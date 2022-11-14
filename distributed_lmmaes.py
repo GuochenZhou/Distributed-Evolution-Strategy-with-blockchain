@@ -2,8 +2,16 @@
 This is a simple version of the outer-es part of our D-LMMAES algorithm
 """
 import numpy as np
+from enum import IntEnum
 
 from pypoplib.es import ES
+
+# helper class used by all optimizer classes
+class Terminations(IntEnum):
+    NO_TERMINATION = 0
+    MAX_FUNCTION_EVALUATIONS = 1  # maximum of function evaluations
+    MAX_RUNTIME = 2  # maximal runtime
+    FITNESS_THRESHOLD = 3  # stopping threshold of fitness
 
 
 class DistributedES(ES):
@@ -13,6 +21,7 @@ class DistributedES(ES):
         ES.__init__(self, problem, options)
         self._customized_class = None  # set by the wrapper
         self.n_islands = options.get('n_islands')  # number of inner ESs
+        self.island_verbose = options.get('island_verbose', False)
         self.island_max_runtime = options.get('island_max_runtime', 3 * 60)  # for inner ESs
         self.n_better_islands = int(np.maximum(5, self.n_islands / 5))  # for outer ES
         w_base, w = np.log((self.n_better_islands * 2 + 1) / 2), np.log(np.arange(self.n_better_islands) + 1)
@@ -28,10 +37,12 @@ class DistributedES(ES):
             for j in self.learning_ratios:
                 self.sl.append([i, j])
         self.is_first_generation = True
-        self.x = self.rng_initialization.uniform(self.initial_lower_boundary,
+        self.best_x = self.rng_initialization.uniform(self.initial_lower_boundary,
                                             self.initial_upper_boundary,
                                             size=(self.n_islands, self.ndim_problem))
-        self.best_x, self.best_y = np.zeros((self.n_islands, self.ndim_problem)), np.zeros((self.n_islands,))
+        self.best_y = np.empty((self.n_islands,))
+        for i in range(self.n_islands):
+            self.best_y[i] = self._evaluate_fitness(self.best_x[i])
         self.n_evolution_paths = 4 + int(3 * np.log(self.ndim_problem))
         self.s = np.zeros((self.n_islands, self.ndim_problem))  # for mutation strengths of all inner ESs
         self.tm = np.zeros((self.n_islands, self.n_evolution_paths, self.ndim_problem))  # transform matrices of all inner ESs
@@ -56,7 +67,7 @@ class DistributedES(ES):
 
     def iterate(self, args=None):
         """
-        Iteration to renew the parameters of the ouyer-es
+        Iteration to renew the parameters of the outer-es
         """
         order = np.argsort(self.best_y)
         index_1, index_2, index_3, index_4, index_5, index_6 = 0, 0, 0, 0, 0, 0
@@ -98,8 +109,6 @@ class DistributedES(ES):
                 pp = p - self.n_low_dim
                 self.sigmas[index] = w_sigma * self.sl[pp][0]
                 self.c_s[index] = self.sl[pp][1]
-            if self.is_first_generation:  # only for the first generation
-                self.best_x[p] = self.x[p]  # each island is initialized randomly
         results = []
         for p in range(self.n_islands):
             option = {'x': self.best_x[p],
@@ -118,8 +127,22 @@ class DistributedES(ES):
         for i in range(len(factor_options)):
             self.best_y[i] = factor_options[i].y
             self.best_x[i] = factor_options[i].x
+            self._evaluate_fitness(self.best_x[i])
             self.s[i] = factor_options[i].s
             self.tm[i] = factor_options[i].tm
             self.c_s[i] = factor_options[i].c_s
             self.sigmas[i] = factor_options[i].sigma
 
+    def _check_terminations(self):
+        if self.n_function_evaluations >= self.max_function_evaluations:
+            termination_signal = True, Terminations.MAX_FUNCTION_EVALUATIONS
+        elif self.runtime >= self.max_runtime:
+            termination_signal = True, Terminations.MAX_RUNTIME
+        elif not self._is_maximization and (self.best_so_far_y <= self.fitness_threshold):
+            termination_signal = True, Terminations.FITNESS_THRESHOLD
+        elif self._is_maximization and (self.best_so_far_y >= self.fitness_threshold):
+            termination_signal = True, Terminations.FITNESS_THRESHOLD
+        else:
+            termination_signal = False, Terminations.NO_TERMINATION
+        self.termination_signal = termination_signal[1]
+        return termination_signal[0]

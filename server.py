@@ -2,6 +2,8 @@
 Blockchain for Distributed Evolution Strategy
 Server script
 """
+import time
+
 from distributed_lmmaes import DistributedES as Solver
 import pypoplib.base_functions as cf
 from flask import Flask, request, jsonify
@@ -50,9 +52,22 @@ def new_option():
                        x=np.array(temp_option['x']),
                        y=np.array(temp_option['y']))
     print(option.y)
-    status['solver'].runtime += temp_option['runtime']
-    print(status['solver'].runtime)
+    status['solver'].time_function_evaluations += temp_option['runtime']
+    print(status['solver'].time_function_evaluations)
     status['blockchain'].add_current_option(option)
+    if temp_option['runtime'] < status['solver'].island_max_runtime:
+        mine_options()
+        print("Already achieved threshold")
+        status['solver'].best_so_far_x = temp_option['x']
+        status['solver'].best_so_far_y = temp_option['y']
+        status['solver'].runtime = temp_option['runtime']
+        print("Runing time:")
+        print(status['solver'].runtime)
+        print("Final answer of x:")
+        print(status['solver'].best_so_far_x)
+        print("Final answer of y:")
+        print(status['solver'].best_so_far_y)
+        status['s'] = 'stop'
     return "Success", 201
 
 
@@ -60,13 +75,18 @@ def new_option():
 @app.route('/global_option', methods=['GET'])
 def renew_global_option():
     if len(status['blockchain'].current_options) >= status['solver'].n_islands:
+        temp_time = time.time()
         status['solver'].renew_factors(status['blockchain'].current_options)
         results = status['solver'].iterate()
         status['blockchain'].renew_global_options(results)
         mine_options()
+        status['solver'].runtime += time.time() - temp_time + status['solver'].island_max_runtime
         if status['solver']._check_terminations():
+            print("Runing time:")
             print(status['solver'].runtime)
-            print(status['solver'].max_runtime)
+            print("Final answer of x:")
+            print(status['solver'].best_so_far_x)
+            print("Final answer of y:")
             print(status['solver'].best_so_far_y)
             status['s'] = 'stop'
     return json.dumps({"global_options": status['blockchain'].global_options}, cls=MyEncoder), 201
@@ -125,27 +145,6 @@ def register_new_inner_node():
     return "Register new node", 400
 
 
-# # register on existing inner node
-# @app.route('/register_inner_exist', methods=['POST'])
-# def register_exist_inner_node():
-#     node_address = request.get_json()["node_address"]
-#     if not node_address:
-#         return "Invalid address data", 400
-#     data = {"node_address": request.host_url}
-#     headers = {'Content-Type': "application/json"}
-#
-#     response = request.post(node_address + "/register_inner_new", data=json.dumps(data), headers=headers)
-#
-#     if response.status_code == 200:
-#         global blockchain
-#         chain_dump = response.json()['chain']
-#         blockchain.add_blocks(chain_dump)
-#         blockchain.inner_nodes.update(response.json()['inner_nodes'])
-#         return "Registration Successful", 200
-#     else:
-#         return response.content, response.status_code
-
-
 # endpoint to mine
 def mine_options():
     # consensus()
@@ -197,19 +196,19 @@ if __name__ == '__main__':
     args = parser.parse_args()
     address = "{host}:{port}".format(host=args.host, port=args.port)
     status['address'] = address
-    function = cf.ellipsoid
-    ndim_problem = 1000
+    function = cf.step
+    ndim_problem = 2000
     problem = {'fitness_function': function,
                'ndim_problem': ndim_problem,
                'upper_boundary': 10.0 * np.ones((ndim_problem,)),
                'lower_boundary': -10.0 * np.ones((ndim_problem,))}
     options = {'max_function_evaluations': np.Inf,
-               'max_runtime': 3600 * 2,  # seconds
-               'island_max_runtime': 60,
+               'max_runtime': 3600,  # seconds
+               'island_max_runtime': 180,
                'island_verbose': False,
-               # 'fitness_threshold': 1e-10,
+               'fitness_threshold': 1e-10,
                'seed_rng': 2022,
-               'record_fitness': True,
+               'record_fitness': False,
                'record_fitness_frequency': 2000,
                'verbose': False,
                'n_islands': 10,

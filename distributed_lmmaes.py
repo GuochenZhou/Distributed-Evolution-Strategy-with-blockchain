@@ -1,10 +1,13 @@
 """
 This is a simple version of the outer-es part of our D-LMMAES algorithm
 """
+import time
+
 import numpy as np
 from enum import IntEnum
 
 from pypoplib.es import ES
+
 
 # helper class used by all optimizer classes
 class Terminations(IntEnum):
@@ -134,6 +137,7 @@ class DistributedES(ES):
             self.sigmas[i] = factor_options[i].sigma
 
     def _check_terminations(self):
+        # self.runtime = time.time() - self.start_time
         if self.n_function_evaluations >= self.max_function_evaluations:
             termination_signal = True, Terminations.MAX_FUNCTION_EVALUATIONS
         elif self.runtime >= self.max_runtime:

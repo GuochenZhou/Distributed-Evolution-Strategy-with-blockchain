@@ -149,7 +149,7 @@ class Client(object):
 if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('-s', '--server', default='10.26.137.51:5000', help='Address of server')
+    parser.add_argument('-s', '--server', default='127.0.0.1:5000', help='Address of server')
     parser.add_argument('-i', '--id', default=0, help='Id of node')
     args = parser.parse_args()
     client = Client(args.id, args.server)

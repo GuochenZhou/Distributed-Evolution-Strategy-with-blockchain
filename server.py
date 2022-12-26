@@ -192,7 +192,7 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
-    parser.add_argument('-i', '--host', default='10.26.137.51', help='IP address of this miner')
+    parser.add_argument('-i', '--host', default='127.0.0.1', help='IP address of this miner')
     args = parser.parse_args()
     address = "{host}:{port}".format(host=args.host, port=args.port)
     status['address'] = address
